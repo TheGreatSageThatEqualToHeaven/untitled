@@ -1,0 +1,456 @@
+-- Load Cerberus Library
+local Library = loadstring(game:HttpGet("https://raw.githubusercontent.com/Jxereas/UI-Libraries/main/cerberus.lua"))()
+
+-- Load Fluent UI Library
+local Fluent = loadstring(game:HttpGet("https://github.com/dawid-scripts/Fluent/releases/latest/download/main.lua"))()
+
+-- Load necessary modules
+local SaveManager = loadstring(game:HttpGet("https://raw.githubusercontent.com/dawid-scripts/Fluent/master/Addons/SaveManager.lua"))()
+local InterfaceManager = loadstring(game:HttpGet("https://raw.githubusercontent.com/dawid-scripts/Fluent/master/Addons/InterfaceManager.lua"))()
+
+-- Get the player's name
+local player = game.Players.LocalPlayer
+local playerName = player.Name
+local playerStates = game:GetService("Workspace").States[playerName]
+
+-- Create Cerberus window
+local window = Library.new("Games Anti system bypass ignore this")
+
+-- Create Fluent window
+local Window = Fluent:CreateWindow({
+    Title = "Tentra Hub " .. Fluent.Version,
+    SubTitle = "by reverend.insanity",
+    TabWidth = 160,
+    Size = UDim2.fromOffset(580, 460),
+    Acrylic = false,
+    Theme = "Dark",
+    MinimizeKey = Enum.KeyCode.LeftControl
+})
+
+-- Tabs for Fluent window
+local Tabs = {
+    ["Auto Dodge Legit"] = Window:AddTab({ Title = "Auto Dodge Legit", Icon = "shield" }),
+    ["Misc"] = Window:AddTab({ Title = "Misc", Icon = "cog" }),  -- New tab for Misc
+    Info = Window:AddTab({ Title = "Info", Icon = "info" }),
+    Settings = Window:AddTab({ Title = "Settings", Icon = "settings" })
+}
+
+-- Fluent Options
+local Options = Fluent.Options
+
+-- Auto Dodge Variables
+local autoDodgeEnabled = false
+local currentDirection = "Automatic"  -- Set default direction to "Automatic"
+local detectDistance = 10
+local connections = {}
+local isStunned = false
+local dodgeMode = "Automatic"  -- Set default dodge mode to "Automatic"
+local dodgeCooldown = 0.3
+local dodgeOnceOnDoublePunch = false  -- New variable for the misc toggle
+local recentAttacks = {}
+local lastDodgeTime = 0  -- Track last dodge time
+
+-- Function to stop auto dodge
+local function stopAutoDodge()
+    for _, conn in pairs(connections) do
+        conn:Disconnect()
+    end
+    connections = {}
+    print("Auto Dodge Stopped")
+
+    if shared.BaseEffectFunction then
+        local Effect = require(game:GetService("ReplicatedStorage").Modules.EffectHelper)
+        for i, v in pairs(shared.BaseEffectFunction) do
+            Effect[i] = v
+        end
+    end
+end
+
+-- Function to execute auto dodge script
+local function autoDodgeScript()
+    if autoDodgeEnabled and not isStunned then
+        print("Auto Dodge Started")
+
+        local Players = game:GetService("Players")
+        local Client = Players.LocalPlayer
+        local Effect = require(game:GetService("ReplicatedStorage").Modules.EffectHelper)
+        local Workspace = game:GetService("Workspace")
+        local UserInputService = game:GetService("UserInputService")
+
+        local isFHeld = false
+
+        local function getRoot(chr)
+            return chr:FindFirstChild("HumanoidRootPart")
+        end
+
+        local function isLocalPlayer(player)
+            return player == Client
+        end
+
+        local function fireRemoteEvent(direction)
+            local directionVector
+            if dodgeMode == "Automatic" then
+                if currentDirection == "Left" then
+                    directionVector = Vector3.new(-0.08688679337501526, 0, 0.9962181448936462)
+                elseif currentDirection == "Right" then
+                    directionVector = Vector3.new(0.08688679337501526, 0, -0.9962181448936462)
+                elseif currentDirection == "Forward" then
+                    directionVector = Vector3.new(0.9962181448936462, 0, 0.08688679337501526)
+                elseif currentDirection == "Backward" then
+                    directionVector = Vector3.new(-0.9962181448936462, 0, -0.08688679337501526)
+                end
+            else
+                if currentDirection == "Left" then
+                    directionVector = Vector3.new(-0.08688679337501526, 0, 0.9962181448936462)
+                elseif currentDirection == "Right" then
+                    directionVector = Vector3.new(0.08688679337501526, 0, -0.9962181448936462)
+                elseif currentDirection == "Forward" then
+                    directionVector = Vector3.new(0.9962181448936462, 0, 0.08688679337501526)
+                elseif currentDirection == "Backward" then
+                    directionVector = Vector3.new(-0.9962181448936462, 0, -0.08688679337501526)
+                else
+                    warn("Invalid direction:", currentDirection)
+                    return
+                end
+            end
+
+            local A_1 = {
+                [1] = {
+                    [1] = {
+                        [1] = directionVector,
+                        [2] = currentDirection,
+                        [3] = 0.06386971473693848
+                    },
+                    [2] = game.Workspace.Live.PunchingGuy,
+                    [3] = true,
+                    [4] = true
+                },
+                [2] = "["
+            }
+            local Event = game:GetService("ReplicatedStorage").BridgeNet2.dataRemoteEvent
+            Event:FireServer(A_1)
+        end
+
+        local function handlePunch(attackerRoot, clientRoot, dodgeDistance, reactionTime)
+            local currentTime = tick()
+            if dodgeOnceOnDoublePunch and (currentTime - lastDodgeTime) < 0.5 then
+                -- Avoid dodging more than once within 0.5 seconds of the last dodge
+                return
+            end
+
+            if not recentAttacks[attackerRoot] or (currentTime - recentAttacks[attackerRoot]) > 0.2 then
+                recentAttacks[attackerRoot] = currentTime
+                lastDodgeTime = currentTime  -- Update last dodge time
+
+                local dodgeDirection = (clientRoot.Position - attackerRoot.Position).unit * dodgeDistance
+                
+                task.spawn(function()
+                    local stamina = Workspace.States[playerName].CharacterData.Stamina.Value
+                    if stamina > 0.1 then
+                        local occupied = Workspace.States[playerName].Occupied
+                        occupied.CanPunch.Value = false
+
+                        wait(reactionTime)
+                        
+                        clientRoot.CFrame = clientRoot.CFrame + dodgeDirection
+                        
+                        occupied.CanPunch.Value = true
+
+                        fireRemoteEvent(currentDirection)
+                    end
+                end)
+            end
+        end
+
+        shared.BaseEffectFunction = shared.BaseEffectFunction or {}
+        for i, v in pairs(Effect) do
+            shared.BaseEffectFunction[i] = shared.BaseEffectFunction[i] or v
+            Effect[i] = function(d, ...)
+                if not isFHeld and autoDodgeEnabled and not isStunned then
+                    task.spawn(function()
+                        if type(d) == "table" and typeof(d[2]) == "Instance" then
+                            local attacker = d[2]
+                            
+                            if not isLocalPlayer(attacker) then
+                                local attackerRoot = getRoot(attacker)
+                                local clientRoot = getRoot(Client.Character)
+
+                                if attackerRoot and clientRoot then
+                                    local distance = (attackerRoot.Position - clientRoot.Position).Magnitude
+                                    local dodgeDist, reactionTime
+
+                                    if distance <= detectDistance then
+                                        if distance <= 1 then
+                                            dodgeDist = 2.0
+                                            reactionTime = Options["ReactionTime1 stud"].Value
+                                        elseif distance <= 2 then
+                                            dodgeDist = 2.0
+                                            reactionTime = Options["ReactionTime2 stud"].Value
+                                        elseif distance <= 3 then
+                                            dodgeDist = 2.0
+                                            reactionTime = Options["ReactionTime3 stud"].Value
+                                        elseif distance <= 4 then
+                                            dodgeDist = 2.0
+                                            reactionTime = Options["ReactionTime4 stud"].Value
+                                        elseif distance <= 5 then
+                                            dodgeDist = 2.0
+                                            reactionTime = Options["ReactionTime5 stud"].Value
+                                        else
+                                            dodgeDist = 2.2
+                                            reactionTime = Options["ReactionTimeFarther"].Value
+                                        end
+
+                                        if distance <= 10 and (d[1] == "AttackTrail" or d[1] == "StartupHighlight" or d[1] == "UltimateHighlight") then
+                                            handlePunch(attackerRoot, clientRoot, dodgeDist, reactionTime)
+                                            wait(dodgeCooldown)  -- Pause for dodge cooldown
+                                        end
+                                    end
+                                end
+                            end
+                        end
+                    end)
+                end
+                return shared.BaseEffectFunction[i](d, ...)
+            end
+        end
+
+        table.insert(connections, UserInputService.InputBegan:Connect(function(input)
+            if input.KeyCode == Enum.KeyCode.F then
+                isFHeld = true
+            end
+        end))
+
+        table.insert(connections, UserInputService.InputEnded:Connect(function(input)
+            if input.KeyCode == Enum.KeyCode.F then
+                isFHeld = false
+            end
+        end))
+
+        table.insert(connections, UserInputService.InputBegan:Connect(function(input)
+            if input.KeyCode == Enum.KeyCode.W then
+                currentDirection = "Forward"
+                dodgeMode = "Manual"
+            elseif input.KeyCode == Enum.KeyCode.S then
+                currentDirection = "Backward"
+                dodgeMode = "Manual"
+            elseif input.KeyCode == Enum.KeyCode.A then
+                currentDirection = "Left"
+                dodgeMode = "Manual"
+            elseif input.KeyCode == Enum.KeyCode.D then
+                currentDirection = "Right"
+                dodgeMode = "Manual"
+            end
+        end))
+    end
+end
+
+-- Function to monitor the Punching state
+local function monitorPunching()
+    local punching = playerStates.Occupied.Punching
+    local function onPunchingChanged()
+        if punching.Value then
+            stopAutoDodge()
+            task.delay(0.3, function()
+                autoDodgeScript()
+            end)
+        else
+            autoDodgeScript()
+        end
+    end
+
+    punching:GetPropertyChangedSignal("Value"):Connect(onPunchingChanged)
+end
+
+-- Function to check and stop auto dodge when stunned
+local function checkStunned()
+    return game:GetService("Workspace").States[playerName].CharacterData.Stunned.Value
+end
+
+-- Update stunned state and manage auto dodge
+local function onStunnedChanged()
+    isStunned = checkStunned()
+    if isStunned then
+        print("Player stunned. Auto Dodge paused.")
+        stopAutoDodge()
+    else
+        print("Player no longer stunned. Auto Dodge will resume immediately.")
+        autoDodgeScript()
+    end
+end
+
+game:GetService("Workspace").States[playerName].CharacterData.Stunned:GetPropertyChangedSignal("Value"):Connect(onStunnedChanged)
+
+-- Function to rejoin the game if kicked
+local function rejoinGame()
+    local Players = game:GetService("Players")
+    local function onPlayerRemoving(player)
+        if player == Players.LocalPlayer then
+            -- Wait for a bit before attempting to rejoin
+            task.wait(5)
+            print("Rejoining game...")
+            game:GetService("TeleportService"):Teleport(game.PlaceId, Players.LocalPlayer)
+        end
+    end
+
+    Players.PlayerRemoving:Connect(onPlayerRemoving)
+end
+
+-- Initialize the rejoin functionality
+rejoinGame()
+
+-- Paragraphs for Auto Dodge Legit tab
+Tabs["Auto Dodge Legit"]:AddParagraph({
+    Title = "Dodge Visibility",
+    Content = "You can't see your dodges, but other players will see them normally. Don't worry if you don't see it yourself."
+})
+
+-- Toggle for Legit Auto Dodge
+local Toggle = Tabs["Auto Dodge Legit"]:AddToggle("Legit Auto Dodge", { Title = "Legit Auto Dodge", Default = false })
+
+Toggle:OnChanged(function()
+    autoDodgeEnabled = Options["Legit Auto Dodge"].Value
+    if autoDodgeEnabled then
+        autoDodgeScript()
+        monitorPunching()
+    else
+        stopAutoDodge()
+    end
+end)
+
+Options["Legit Auto Dodge"]:SetValue(false)
+
+-- Slider for Detect Distance
+local detectDistanceSlider = Tabs["Auto Dodge Legit"]:AddSlider("Detect Distance", {
+    Title = "Detect Distance",
+    Description = "Adjust the distance at which auto dodge triggers.",
+    Default = 10,
+    Min = 0,
+    Max = 100,
+    Rounding = 0,
+    Callback = function(Value)
+        detectDistance = Value
+    end
+})
+
+-- Dropdown for Dodge Method
+local dodgeMethodOptions = {"Left", "Right", "Forward", "Backward", "Automatic"}
+local DodgeMethodDropdown = Tabs["Auto Dodge Legit"]:AddDropdown("Dodge Method", {
+    Title = "Dodge Method",
+    Values = dodgeMethodOptions,
+    Default = "Automatic",  -- Set default to "Automatic"
+    Multi = false,
+    Callback = function(Value)
+        currentDirection = Value
+        dodgeMode = Value == "Automatic" and "Automatic" or "Manual"
+    end
+})
+
+-- Paragraph for Dodge Settings
+Tabs["Auto Dodge Legit"]:AddParagraph({
+    Title = "Dodge Settings",
+    Content = "Find balanced settings for dodging. If you don't find good settings, it may look like you're hacking."
+})
+
+-- Function to create sliders for reaction times
+local function createSlider(name, defaultValue)
+    local slider = Tabs["Auto Dodge Legit"]:AddSlider(name, {
+        Title = name,
+        Description = "Adjust Reaction Time",
+        Default = defaultValue,
+        Min = 0,
+        Max = 2,
+        Rounding = 2
+    })
+    Options[name] = slider
+    slider:SetValue(defaultValue)
+end
+
+-- Add sliders for reaction times
+createSlider("ReactionTime1 stud", 0.05)
+createSlider("ReactionTime2 stud", 0.06)
+createSlider("ReactionTime3 stud", 0.07)
+createSlider("ReactionTime4 stud", 0.08)
+createSlider("ReactionTime5 stud", 0.09)
+createSlider("ReactionTimeFarther", 0.1)
+
+-- New Misc tab functionality
+local miscTab = Tabs["Misc"]
+
+-- Toggle for less obvious dodges for feints
+local lessObviousDodgeToggle = miscTab:AddToggle("Turn On for Less Obvious Dodges for Feints", {
+    Title = "Turn On for Less Obvious Dodges for Feints",
+    Default = false
+})
+
+lessObviousDodgeToggle:OnChanged(function()
+    dodgeOnceOnDoublePunch = lessObviousDodgeToggle.Value
+end)
+
+-- Paragraphs for Info tab
+local playerData = playerStates.PlayerData
+
+Tabs.Info:AddParagraph({
+    Title = "Knockdowns",
+    Content = tostring(playerData.Knockdowns.Value)
+})
+
+Tabs.Info:AddParagraph({
+    Title = "Map",
+    Content = tostring(playerData.Map.Value)
+})
+
+Tabs.Info:AddParagraph({
+    Title = "Rating",
+    Content = tostring(playerData.Rating.Value)
+})
+
+Tabs.Info:AddParagraph({
+    Title = "Sell Value",
+    Content = tostring(playerData.SellValue.Value)
+})
+
+Tabs.Info:AddParagraph({
+    Title = "Streak",
+    Content = tostring(playerData.Streak.Value)
+})
+
+Tabs.Info:AddParagraph({
+    Title = "Style",
+    Content = tostring(playerData.Style.Value)
+})
+
+Tabs.Info:AddParagraph({
+    Title = "Title",
+    Content = tostring(playerData.Title.Value)
+})
+
+Tabs.Info:AddParagraph({
+    Title = "Cash",
+    Content = tostring(playerData.Cash.Value)
+})
+
+-- Select the first tab by default
+Window:SelectTab(1)
+
+-- Notification that the script has been loaded
+Fluent:Notify({
+    Title = "Tentra",
+    Content = "The script has been loaded.",
+    Duration = 8
+})
+
+-- Load configuration from save manager
+SaveManager:SetLibrary(Fluent)
+InterfaceManager:SetLibrary(Fluent)
+SaveManager:IgnoreThemeSettings()
+SaveManager:SetIgnoreIndexes({})
+InterfaceManager:SetFolder("FluentScriptHub")
+SaveManager:SetFolder("FluentScriptHub/specific-game")
+InterfaceManager:BuildInterfaceSection(Tabs.Settings)
+SaveManager:BuildConfigSection(Tabs.Settings)
+SaveManager:LoadAutoloadConfig()
+
+-- Initialize auto dodge script if enabled
+if autoDodgeEnabled then
+    autoDodgeScript()
+end
